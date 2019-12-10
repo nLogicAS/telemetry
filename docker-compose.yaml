@@ -1,0 +1,81 @@
+version: "3.7"
+
+services:
+
+  telegraf:
+    container_name: telegraf
+    image: telegraf:latest
+    restart: always
+    volumes:
+      - ~/telemetry/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    network_mode: host
+    labels:
+      - "traefik.enable=false"
+
+  traefik:
+    container_name: traefik
+    image: traefik:v2.1
+    restart: unless-stopped
+    domainname: ${DOMAINNAME}
+    command:
+      - --entrypoints.http.address=:80
+      - --entrypoints.https.address=:443
+      - --api
+      - --providers.docker
+      - --providers.docker.exposedbydefault=false
+      - --providers.file.directory=/configuration/
+      - --providers.file.watch=true
+      - --global.sendAnonymousUsage=true
+      - --log.level=INFO
+      - --log.format=json
+      - --accesslog=true
+      - --accesslog.filepath=/log/access.log
+      # Certificate resolver DNS Acme 
+      - --certificatesresolvers.basic.acme.dnschallenge=true
+      - --certificatesresolvers.basic.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.basic.acme.email=your-email@your-domain.org
+      - --certificatesresolvers.basic.acme.storage=/le/acme.json
+    networks:
+      - default
+      - web
+    ports:
+      - 80:80
+      - 443:443
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=PathPrefix(`/api`) || PathPrefix(`/dashboard`)"
+#      - "traefik.http.routers.dashboard.rule=Host(`yourdomain.com`) && PathPrefix(`/api`) || PathPrefix(`/dashboard`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=traefik-auth"
+      - "traefik.http.routers.dashboard.entrypoints=https"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=basic"
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=nlogic:$$apr1$$VSpLHz4X$$cDyfPRCSL0zGMZ8hX.tls0"
+
+      # global redirect to https
+      - "traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)"
+      - "traefik.http.routers.http-catchall.entrypoints=http"
+      - "traefik.http.routers.http-catchall.middlewares=redirect-to-https@docker"
+
+      # middleware redirect
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+
+    volumes:
+      - ~/telemetry/traefik/acme.json:/le/acme.json
+#      - ~/telemetry/traefik/dynamic_conf.yaml:/dynamic_conf.yaml
+      - ~/telemetry/traefik/:/configuration/
+      - ~/telemetry/traefik/log/:/log/
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - CLOUDFLARE_EMAIL=${CLOUDFLARE_EMAIL}
+      - CLOUDFLARE_API_KEY=${CLOUDFLARE_API_KEY}
+      - TZ=Europe/Oslo
+
+networks:
+  web:
+    external:
+      name: web
+  default:
+    driver: bridge
+
