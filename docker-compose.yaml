@@ -51,7 +51,7 @@ services:
       - "traefik.http.routers.dashboard.entrypoints=https"
       - "traefik.http.routers.dashboard.tls=true"
       - "traefik.http.routers.dashboard.tls.certresolver=basic"
-      - "traefik.http.middlewares.traefik-auth.basicauth.users=nlogic:$$apr1$$VSpLHz4X$$cDyfPRCSL0zGMZ8hX.tls0"
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=admin:$$apr1$$VSpLHz4X$$cDyfPRCSL0zGMZ8hX.tls0"
 
       # global redirect to https
       - "traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)"
@@ -72,10 +72,54 @@ services:
       - CLOUDFLARE_API_KEY=${CLOUDFLARE_API_KEY}
       - TZ=Europe/Oslo
 
+  influxdb:
+    image: influxdb:latest
+    restart: unless-stopped
+    volumes:
+      - ~/influxdb:/var/lib/influxdb
+    environment:
+      - INFLUXDB_DB=telegraf 
+      - INFLUXDB_USER=telegraf
+      - INFLUXDB_USER_PASSWORD=secretpassword
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.influxdb.rule=Path(`/influxdb`)"
+#      - "traefik.http.routers.influxdb.rule=Host(`yourdomain.com`) && Path(`/influxdb`)"
+      - "traefik.http.routers.influxdb.entrypoints=https"
+      - "traefik.http.routers.influxdb.tls=true"
+#      - "traefik.http.routers.influxdb.tls.certresolver=basic"
+    networks:
+      - web
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    volumes:
+      - ~/grafana:/var/lib/grafana
+      - ~/grafana/log/:/var/log/grafana
+    environment:
+     - GF_SECURITY_ADMIN_PASSWORD=secretpassword
+     # Comment out if you have users that should sign up
+     - GF_USERS_ALLOW_SIGN_UP=false 
+     - GF_SERVER_ROOT_URL=https://yourdomain.com
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Path(`/grafana`)"
+#      - "traefik.http.routers.grafana.rule=Host(`yourdomain.com`) && Path(`/grafana`)"
+      - "traefik.http.routers.grafana.entrypoints=https"
+      - "traefik.http.routers.grafana.tls=true"
+#      - "traefik.http.routers.grafana.tls.certresolver=basic"
+    networks:
+      - web
+
+volumes:
+  grafana-storage:
+    external: true
+
 networks:
   web:
     external:
       name: web
   default:
     driver: bridge
-
