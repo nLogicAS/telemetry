@@ -8,6 +8,7 @@ services:
     restart: always
     volumes:
       - ~/telemetry/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - ~/telemetry/telegraf/mibs:/usr/share/snmp/mibs:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     network_mode: host
     labels:
@@ -15,7 +16,7 @@ services:
 
   traefik:
     container_name: traefik
-    image: traefik:v2.1
+    image: traefik:latest
     restart: unless-stopped
     domainname: ${DOMAINNAME}
     command:
@@ -81,6 +82,7 @@ services:
       - INFLUXDB_DB=telegraf 
       - INFLUXDB_USER=telegraf
       - INFLUXDB_USER_PASSWORD=secretpassword
+
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=web"
@@ -103,6 +105,8 @@ services:
      # Comment out if you have users that should sign up
      - GF_USERS_ALLOW_SIGN_UP=false 
      - GF_SERVER_ROOT_URL=https://yourdomain.com
+     - GF_SERVER_DOMAIN=yourdomain.com
+
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.grafana.rule=Path(`/grafana`)"
@@ -112,10 +116,6 @@ services:
 #      - "traefik.http.routers.grafana.tls.certresolver=basic"
     networks:
       - web
-
-volumes:
-  grafana-storage:
-    external: true
 
 networks:
   web:
